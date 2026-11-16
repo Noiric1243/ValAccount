@@ -1,0 +1,20 @@
+# User credentials and private state (at any depth)
+**/data/
+**/diagnostics/
+*.vault
+*.vault.*
+*.bak
+*.log
+.env
+.env.*
+# Build and test artifacts
+/bin/
+/obj/
+/test-output/
+/preview-output/
+*.exe
+*.pdb
+.vs/
+.vscode/
+Thumbs.db
+Desktop.ini
