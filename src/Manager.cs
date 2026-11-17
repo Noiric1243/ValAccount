@@ -194,7 +194,18 @@ namespace ValoAccounts {
             { "VALO 账号启动器", "ValAccount By Noiric" },
             { "无法读取、迁移或解密账号库。请确认使用原来的 Windows 用户、EXE 所在文件夹可写，且文件未损坏。\n\n程序不会覆盖原文件；data 中的 .bak 是上一版加密备份。", "Could not read, migrate, or decrypt the vault. Use the original Windows user, check that the EXE folder is writable and the file is intact.\n\nThe original file is retained. The .bak file in data is the previous encrypted backup." },
             { "账号库未打开", "Vault unavailable" },
-            { "没有的可以不填写。", "Leave unavailable fields blank." }
+            { "没有的可以不填写。", "Leave unavailable fields blank." },
+            { "带 * 为必填项。", "* Required." },
+            { "Riot 账号", "Riot account" },
+            { "关联邮箱（选填）", "Linked email (optional)" },
+            { "例如：主账号 · 亚服", "e.g. Main · AP" },
+            { "可留空，常见邮箱会自动识别", "Optional; common providers are detected" },
+            { "搜索账号、登录名或邮箱", "Search accounts, usernames or email" },
+            { "还没有账号。点击右上角“+ 添加账号”开始。", "No accounts yet. Click “+ Add account” to get started." },
+            { "没有匹配的账号，换个关键词试试。", "No matching accounts. Try another keyword." },
+            { "添加账号后，双击即可启动并填入。", "Add an account, then double-click it to launch & fill." },
+            { " 个账号 · 双击账号即可启动并填入", " account(s) · Double-click to launch & fill" },
+            { "已复制", "Copied" }
         };
         public static string T(string text) { string result; return English && Translations.TryGetValue(text, out result) ? result : text; }
         public static bool LoadPreference() {
@@ -210,13 +221,16 @@ namespace ValoAccounts {
     }
     public class LanguageForm : Form {
         public LanguageForm() {
-            Theme.Form(this, "ValAccount By Noiric", 420, 250);
-            Theme.Label(this, "语言 / Language", 28, 26, 360, 42, 21, false);
-            var choice = new ComboBox { Location = new Point(28, 94), Width = 360, DropDownStyle = ComboBoxStyle.DropDownList };
-            choice.Items.AddRange(new object[] { "简体中文", "English" }); choice.SelectedIndex = I18n.English ? 1 : 0;
-            Controls.Add(choice);
-            var next = Theme.Button(this, "继续 / Continue", 218, 176, 170, 42, true, delegate {
-                bool previous = I18n.English; I18n.English = choice.SelectedIndex == 1;
+            Theme.Form(this, "ValAccount By Noiric", 440, 262); MinimizeBox = false; ShowInTaskbar = false;
+            Theme.Label(this, "语言 / Language", 32, 22, 376, 34, 16, false, true);
+            Theme.Label(this, "选择界面语言 / Choose display language", 32, 58, 376, 22, 9.5f, true);
+            bool english = I18n.English;
+            RoundedButton zh = null, en = null;
+            zh = Theme.Button(this, "简体中文", 32, 100, 182, 56, false, delegate { english = false; zh.Checked = true; en.Checked = false; });
+            en = Theme.Button(this, "English", 226, 100, 182, 56, false, delegate { english = true; en.Checked = true; zh.Checked = false; });
+            zh.Checked = !english; en.Checked = english;
+            var next = Theme.Button(this, "继续 / Continue", 238, 190, 170, 42, true, delegate {
+                bool previous = I18n.English; I18n.English = english;
                 try { I18n.SavePreference(); }
                 catch { I18n.English = previous; Theme.Error(this, "无法保存语言设置 / Could not save language. Check folder permissions."); return; }
                 DialogResult = DialogResult.OK; Close();
@@ -225,22 +239,75 @@ namespace ValoAccounts {
         }
     }
     public class RoundedButton : Button {
+        bool hover, pressed, isChecked;
+        public bool Primary, Danger;
+        public Color Surface = Color.Empty;
+        public bool Checked { get { return isChecked; } set { isChecked = value; Invalidate(); } }
+        public RoundedButton() {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; Cursor = Cursors.Hand; UseVisualStyleBackColor = false;
+        }
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hover = pressed = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseDown(MouseEventArgs e) { if (e.Button == MouseButtons.Left) { pressed = true; Invalidate(); } base.OnMouseDown(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { pressed = false; Invalidate(); base.OnMouseUp(e); }
+        protected override void OnEnabledChanged(EventArgs e) { if (!Enabled) hover = pressed = false; Invalidate(); base.OnEnabledChanged(e); }
+        protected override void OnTextChanged(EventArgs e) { Invalidate(); base.OnTextChanged(e); }
         protected override void OnPaint(PaintEventArgs e) {
-            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            e.Graphics.Clear(Parent == null ? Theme.Bg : Parent.BackColor);
-            var rect = new RectangleF(1, 1, Width - 3, Height - 3);
-            using (var path = Theme.Round(rect, 10)) {
-                Color fill = Enabled ? BackColor : Color.FromArgb(232, 232, 237);
-                if (Enabled && ClientRectangle.Contains(PointToClient(Cursor.Position))) fill = ControlPaint.Light(fill, .08f);
-                using (var b = new SolidBrush(fill)) e.Graphics.FillPath(b, path);
-                if (BackColor != Theme.Accent) using (var pen = new Pen(Color.FromArgb(220, 220, 225))) e.Graphics.DrawPath(pen, path);
-                if (Focused && ShowFocusCues) using (var pen = new Pen(Theme.Accent, 2)) e.Graphics.DrawPath(pen, path);
+            var g = e.Graphics; g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(Surface != Color.Empty ? Surface : Parent == null ? Theme.Bg : Parent.BackColor);
+            Color fill, border, fore;
+            if (Primary) {
+                fill = !Enabled ? Color.FromArgb(239, 186, 190) : pressed ? Color.FromArgb(172, 28, 39) : hover ? Theme.AccentDark : Theme.Accent;
+                border = fill; fore = Color.White;
+            } else if (isChecked) {
+                fill = Theme.AccentSoft; border = Theme.Accent; fore = Theme.Text;
+            } else {
+                fill = !Enabled ? Color.FromArgb(246, 246, 248) : pressed ? Color.FromArgb(236, 237, 241) : hover ? Theme.Hover : Theme.Card;
+                border = Enabled && hover ? Color.FromArgb(206, 208, 214) : Theme.Border;
+                fore = !Enabled ? Color.FromArgb(170, 170, 178) : Danger ? Theme.Accent : Theme.Text;
             }
-            TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, Enabled ? ForeColor : Theme.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            var rect = new RectangleF(.5f, .5f, Width - 1f, Height - 1f);
+            using (var path = Theme.Round(rect, 9)) {
+                using (var b = new SolidBrush(fill)) g.FillPath(b, path);
+                using (var pen = new Pen(border, isChecked ? 1.5f : 1f)) g.DrawPath(pen, path);
+            }
+            if (Focused && ShowFocusCues && Enabled) {
+                var inner = new RectangleF(2.5f, 2.5f, Width - 5f, Height - 5f);
+                using (var path = Theme.Round(inner, 7)) using (var pen = new Pen(Primary ? Color.White : Theme.Accent, 1.5f)) g.DrawPath(pen, path);
+            }
+            TextRenderer.DrawText(g, Text, Font, ClientRectangle, fore, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
         }
     }
+    public class MenuRenderer : ToolStripProfessionalRenderer {
+        protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e) { e.Graphics.Clear(Theme.Card); }
+        protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) {
+            using (var pen = new Pen(Theme.Border)) e.Graphics.DrawRectangle(pen, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1);
+        }
+        protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { }
+        protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e) {
+            if (!e.Item.Selected || !e.Item.Enabled) return;
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var path = Theme.Round(new RectangleF(4, 1, e.Item.Width - 8, e.Item.Height - 2), 6)) using (var b = new SolidBrush(Theme.AccentSoft)) e.Graphics.FillPath(b, path);
+        }
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e) { e.TextColor = e.Item.Enabled ? Theme.Text : Theme.Muted; base.OnRenderItemText(e); }
+    }
     public static class Theme {
-        public static Color Bg = Color.FromArgb(245, 245, 247), Card = Color.White, Text = Color.FromArgb(29, 29, 31), Muted = Color.FromArgb(110, 110, 115), Accent = Color.FromArgb(220, 48, 59);
+        public static Color Bg = Color.FromArgb(244, 245, 248), Card = Color.White, Text = Color.FromArgb(24, 24, 27), Muted = Color.FromArgb(113, 113, 122),
+            Border = Color.FromArgb(226, 228, 233), Field = Color.FromArgb(248, 249, 251), Hover = Color.FromArgb(246, 247, 250), Divider = Color.FromArgb(240, 241, 244),
+            Accent = Color.FromArgb(220, 48, 59), AccentDark = Color.FromArgb(194, 34, 46), AccentSoft = Color.FromArgb(254, 239, 240);
+        static readonly Dictionary<string, Font> fonts = new Dictionary<string, Font>();
+        public static Font Font(float size, bool bold) {
+            string name = I18n.English ? "Segoe UI" : "Microsoft YaHei UI";
+            FontStyle style = bold ? FontStyle.Bold : FontStyle.Regular;
+            string key = name + "|" + size + "|" + style;
+            Font font;
+            if (!fonts.TryGetValue(key, out font)) { font = new Font(name, size, style); fonts[key] = font; }
+            return font;
+        }
+        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, string lParam);
+        static int ColorRef(Color c) { return c.R | (c.G << 8) | (c.B << 16); }
         public static System.Drawing.Drawing2D.GraphicsPath Round(RectangleF r, float radius) {
             var p = new System.Drawing.Drawing2D.GraphicsPath(); float d = radius * 2;
             p.AddArc(r.Left, r.Top, d, d, 180, 90); p.AddArc(r.Right - d, r.Top, d, d, 270, 90);
@@ -249,31 +316,61 @@ namespace ValoAccounts {
         public static void Form(Form f, string title, int w, int h) {
             f.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             f.Text = title; f.ClientSize = new Size(w, h); f.BackColor = Bg; f.ForeColor = Text;
-            f.Font = new Font("Segoe UI", 10); f.StartPosition = FormStartPosition.CenterScreen;
+            f.Font = Font(10, false); f.StartPosition = FormStartPosition.CenterScreen;
             f.FormBorderStyle = FormBorderStyle.FixedSingle; f.MaximizeBox = false; f.AutoScaleMode = AutoScaleMode.Dpi;
+            typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(f, true, null);
+            // Windows 11: tint the title bar to match the window background. Ignored on older systems.
+            f.HandleCreated += delegate {
+                try { int caption = ColorRef(Bg), text = ColorRef(Text); DwmSetWindowAttribute(f.Handle, 35, ref caption, 4); DwmSetWindowAttribute(f.Handle, 36, ref text, 4); } catch { }
+            };
         }
-        public static Label Label(Control p, string text, int x, int y, int w, int h, float size, bool muted) {
-            var c = new Label { Text = text, Location = new Point(x, y), Size = new Size(w, h), ForeColor = muted ? Muted : Text, Font = new Font("Segoe UI", size), BackColor = Color.Transparent };
+        public static void Surface(Control p, Rectangle r) {
+            p.Paint += delegate(object sender, PaintEventArgs e) {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using (var path = Round(new RectangleF(r.X + .5f, r.Y + .5f, r.Width - 1f, r.Height - 1f), 12)) {
+                    using (var b = new SolidBrush(Card)) e.Graphics.FillPath(b, path);
+                    using (var pen = new Pen(Border)) e.Graphics.DrawPath(pen, path);
+                }
+            };
+        }
+        public static Label Label(Control p, string text, int x, int y, int w, int h, float size, bool muted, bool bold = false) {
+            var c = new Label { Text = text, Location = new Point(x, y), Size = new Size(w, h), ForeColor = muted ? Muted : Text, Font = Font(size, bold), BackColor = Color.Transparent, UseMnemonic = false, AutoEllipsis = true };
             p.Controls.Add(c); return c;
         }
-        public static Button Button(Control p, string text, int x, int y, int w, int h, bool accent, EventHandler click) {
-            var c = new RoundedButton { Text = text, Location = new Point(x, y), Size = new Size(w, h), FlatStyle = FlatStyle.Flat, BackColor = accent ? Accent : Card, ForeColor = accent ? Color.White : Text, Cursor = Cursors.Hand, UseVisualStyleBackColor = false };
-            c.FlatAppearance.BorderSize = 0; c.Click += click; p.Controls.Add(c); return c;
+        public static RoundedButton Button(Control p, string text, int x, int y, int w, int h, bool accent, EventHandler click) {
+            var c = new RoundedButton { Text = text, Location = new Point(x, y), Size = new Size(w, h), Primary = accent, BackColor = accent ? Accent : Card, ForeColor = accent ? Color.White : Text, Font = Font(10, accent) };
+            c.Click += click; p.Controls.Add(c); return c;
         }
         public static TextBox Input(Control p, int x, int y, int w, bool secret) {
-            var c = new TextBox { Location = new Point(x, y), Width = w, BackColor = Card, ForeColor = Text, BorderStyle = BorderStyle.FixedSingle, UseSystemPasswordChar = secret, MaxLength = 512 };
-            c.BorderStyle = BorderStyle.None; c.Height = 25;
-            var shell = new Panel { Location = new Point(x - 1, y - 7), Size = new Size(w + 2, 40), BackColor = p.BackColor };
+            var c = new TextBox { BackColor = Card, ForeColor = Text, BorderStyle = BorderStyle.None, UseSystemPasswordChar = secret, MaxLength = 512 };
+            var shell = new Panel { Location = new Point(x - 1, y - 7), Size = new Size(w + 2, 40), BackColor = Color.Transparent, Cursor = Cursors.IBeam };
+            bool hover = false;
             p.Controls.Add(shell); shell.SendToBack();
             shell.Paint += delegate(object sender, PaintEventArgs e) {
                 e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                using (var path = Round(new RectangleF(1, 1, shell.Width - 3, shell.Height - 3), 8)) {
-                    using (var fill = new SolidBrush(Card)) e.Graphics.FillPath(fill, path);
-                    using (var pen = new Pen(c.Focused ? Accent : Color.FromArgb(218, 218, 223), c.Focused ? 1.5f : 1f)) e.Graphics.DrawPath(pen, path);
+                using (var path = Round(new RectangleF(.5f, .5f, shell.Width - 1.5f, shell.Height - 1.5f), 8)) {
+                    using (var fill = new SolidBrush(c.BackColor)) e.Graphics.FillPath(fill, path);
+                    Color line = c.Focused ? Accent : hover && !c.ReadOnly ? Color.FromArgb(200, 202, 209) : Border;
+                    using (var pen = new Pen(line, c.Focused ? 1.5f : 1f)) e.Graphics.DrawPath(pen, path);
                 }
             };
+            EventHandler enter = delegate { hover = true; shell.Invalidate(); }, leave = delegate { hover = shell.ClientRectangle.Contains(shell.PointToClient(Cursor.Position)); shell.Invalidate(); };
+            shell.MouseEnter += enter; c.MouseEnter += enter; shell.MouseLeave += leave; c.MouseLeave += leave;
+            shell.Click += delegate { c.Focus(); };
             c.GotFocus += delegate { shell.Invalidate(); }; c.LostFocus += delegate { shell.Invalidate(); };
-            shell.Controls.Add(c); c.Location = new Point(10, 10); c.Width = w - 20; return c;
+            c.BackColorChanged += delegate { shell.Invalidate(); };
+            // Fixed height with spare room below the text so descenders and underscores are not clipped.
+            shell.Controls.Add(c); c.AutoSize = false; int textHeight = c.Font.Height;
+            c.Size = new Size(w - 22, textHeight + 6); c.Location = new Point(12, Math.Max(0, (shell.Height - textHeight) / 2)); return c;
+        }
+        public static void Placeholder(TextBox c, string text) {
+            EventHandler apply = delegate { SendMessage(c.Handle, 0x1501, (IntPtr)1, text); };
+            if (c.IsHandleCreated) apply(c, EventArgs.Empty);
+            c.HandleCreated += apply;
+        }
+        public static CheckBox Check(Control p, string text, int x, int y, int w) {
+            var c = new CheckBox { Text = text, Location = new Point(x, y), Size = new Size(w, 26), Font = Font(9.5f, false), ForeColor = Text, BackColor = Color.Transparent, Cursor = Cursors.Hand };
+            p.Controls.Add(c); return c;
         }
         public static void Error(IWin32Window owner, string text) { MessageBox.Show(owner, text, I18n.T("未完成"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
     }
@@ -281,30 +378,41 @@ namespace ValoAccounts {
         public Account Result;
         TextBox label, user, pass, email, emailPass, url;
         public EditForm(Account account) {
-            Theme.Form(this, account == null ? I18n.T("添加账号") : I18n.T("编辑账号"), 620, 640);
-            Theme.Label(this, account == null ? I18n.T("添加一个账号") : I18n.T("编辑账号资料"), 28, 20, 560, 36, 21, false);
-            Theme.Label(this, I18n.T("没有的可以不填写。"), 28, 66, 560, 25, 10, true);
-            Theme.Label(this, I18n.T("账号备注"), 28, 105, 560, 24, 10, false);
-            label = Theme.Input(this, 28, 133, 560, false); label.MaxLength = 80;
-            Theme.Label(this, I18n.T("Riot 登录名 *"), 28, 177, 560, 24, 10, false);
-            user = Theme.Input(this, 28, 205, 560, false);
-            Theme.Label(this, I18n.T("Riot 密码 *"), 28, 249, 250, 24, 10, false);
-            pass = Theme.Input(this, 28, 277, 560, true);
-            Theme.Label(this, I18n.T("邮箱地址"), 28, 315, 560, 24, 10, false);
-            email = Theme.Input(this, 28, 343, 560, false);
-            Theme.Label(this, I18n.T("邮箱密码"), 28, 387, 560, 24, 10, false);
-            emailPass = Theme.Input(this, 28, 415, 560, true);
-            Theme.Label(this, I18n.T("邮箱登录网址"), 28, 459, 560, 24, 10, false);
-            url = Theme.Input(this, 28, 487, 560, false); url.MaxLength = 2048;
-            var reveal = new CheckBox { Text = I18n.T("显示密码"), Location = new Point(28, 542), Size = new Size(140, 26) }; Controls.Add(reveal);
+            Theme.Form(this, account == null ? I18n.T("添加账号") : I18n.T("编辑账号"), 600, 624); MinimizeBox = false; ShowInTaskbar = false;
+            Theme.Label(this, account == null ? I18n.T("添加一个账号") : I18n.T("编辑账号资料"), 32, 22, 536, 34, 16, false, true);
+            Theme.Label(this, I18n.T("没有的可以不填写。") + "  " + I18n.T("带 * 为必填项。"), 32, 58, 536, 22, 9.5f, true);
+
+            Theme.Surface(this, new Rectangle(32, 96, 536, 214));
+            Theme.Label(this, I18n.T("Riot 账号"), 52, 112, 496, 24, 10.5f, false, true);
+            Theme.Label(this, I18n.T("账号备注"), 52, 146, 496, 22, 9.5f, true);
+            label = Theme.Input(this, 52, 177, 496, false); label.MaxLength = 80;
+            Theme.Label(this, I18n.T("Riot 登录名 *"), 52, 226, 240, 22, 9.5f, true);
+            user = Theme.Input(this, 52, 257, 240, false);
+            Theme.Label(this, I18n.T("Riot 密码 *"), 308, 226, 240, 22, 9.5f, true);
+            pass = Theme.Input(this, 308, 257, 240, true);
+
+            Theme.Surface(this, new Rectangle(32, 326, 536, 214));
+            Theme.Label(this, I18n.T("关联邮箱（选填）"), 52, 342, 496, 24, 10.5f, false, true);
+            Theme.Label(this, I18n.T("邮箱地址"), 52, 376, 240, 22, 9.5f, true);
+            email = Theme.Input(this, 52, 407, 240, false);
+            Theme.Label(this, I18n.T("邮箱密码"), 308, 376, 240, 22, 9.5f, true);
+            emailPass = Theme.Input(this, 308, 407, 240, true);
+            Theme.Label(this, I18n.T("邮箱登录网址"), 52, 456, 496, 22, 9.5f, true);
+            url = Theme.Input(this, 52, 487, 496, false); url.MaxLength = 2048;
+
+            Theme.Placeholder(label, I18n.T("例如：主账号 · 亚服"));
+            Theme.Placeholder(email, "name@example.com");
+            Theme.Placeholder(url, I18n.T("可留空，常见邮箱会自动识别"));
+
+            var reveal = Theme.Check(this, I18n.T("显示密码"), 32, 567, 200);
             reveal.CheckedChanged += delegate { pass.UseSystemPasswordChar = emailPass.UseSystemPasswordChar = !reveal.Checked; };
             string previousEmail = account == null ? "" : account.Email;
             email.Leave += delegate {
                 if (String.IsNullOrWhiteSpace(url.Text) || url.Text == MailLinks.Suggest(previousEmail)) url.Text = MailLinks.Suggest(email.Text);
                 previousEmail = email.Text;
             };
-            Theme.Button(this, I18n.T("取消"), 354, 576, 106, 38, false, delegate { Close(); });
-            Theme.Button(this, I18n.T("保存账号"), 474, 576, 114, 38, true, delegate {
+            var cancel = Theme.Button(this, I18n.T("取消"), 332, 560, 104, 40, false, delegate { Close(); });
+            var save = Theme.Button(this, I18n.T("保存账号"), 448, 560, 120, 40, true, delegate {
                 if (String.IsNullOrWhiteSpace(user.Text) || String.IsNullOrEmpty(pass.Text)) { Theme.Error(this, I18n.T("请填写 Riot 登录名和密码。")); return; }
                 if (!String.IsNullOrWhiteSpace(email.Text) && !MailLinks.ValidEmail(email.Text.Trim())) { Theme.Error(this, I18n.T("邮箱地址格式不正确。")); return; }
                 if (!String.IsNullOrEmpty(emailPass.Text) && String.IsNullOrWhiteSpace(email.Text)) { Theme.Error(this, I18n.T("请先填写关联邮箱地址。")); return; }
@@ -313,7 +421,10 @@ namespace ValoAccounts {
                 Result = new Account { Id = account == null ? Guid.NewGuid().ToString("N") : account.Id, Label = label.Text.Trim(), Username = user.Text.Trim(), Password = pass.Text, Email = email.Text.Trim(), EmailPassword = emailPass.Text, EmailUrl = MailLinks.Normalize(url.Text) };
                 DialogResult = DialogResult.OK; Close();
             });
+            AcceptButton = save; CancelButton = cancel;
             if (account != null) { label.Text = account.Label; user.Text = account.Username; pass.Text = account.Password; email.Text = account.Email; emailPass.Text = account.EmailPassword; url.Text = account.EmailUrl; }
+            ActiveControl = account == null ? label : user;
+            Shown += delegate { var focused = ActiveControl as TextBox; if (focused != null) focused.Select(focused.TextLength, 0); };
         }
     }
     public static class RiotFill {
@@ -443,49 +554,78 @@ namespace ValoAccounts {
         VaultData data;
         TextBox search;
         ListView list;
-        Label status;
+        Label status, summary, emptyHint;
         Button launch;
         CancellationTokenSource cancellation;
         bool busy;
         bool preview;
+        int hoverIndex = -1;
+        string lastSelectedId;
+        const int RowHeight = 52;
+        static readonly Color[] AvatarColors = {
+            Color.FromArgb(99, 102, 241), Color.FromArgb(14, 165, 233), Color.FromArgb(16, 185, 129), Color.FromArgb(245, 158, 11),
+            Color.FromArgb(236, 72, 153), Color.FromArgb(139, 92, 246), Color.FromArgb(20, 184, 166), Color.FromArgb(234, 88, 12)
+        };
         public MainForm(string path, VaultData initial, bool isPreview) {
             vaultPath = path; data = initial; preview = isPreview;
-            Theme.Form(this, "ValAccount By Noiric", 950, 480);
-            Theme.Button(this, I18n.T("+ 添加账号"), 30, 24, 130, 40, true, delegate { Edit(null); });
-            Theme.Label(this, I18n.T("搜索"), 505, 34, 55, 26, 10, true);
-            search = Theme.Input(this, 558, 32, 362, false); search.TextChanged += delegate { RefreshList(null); };
-            list = new ListView { Location = new Point(30, 88), Size = new Size(890, 280), View = View.Details, FullRowSelect = true, HideSelection = false, MultiSelect = false, BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, HeaderStyle = ColumnHeaderStyle.Nonclickable };
-            list.Columns.Add(I18n.T("账号"), 250); list.Columns.Add(I18n.T("Riot 登录名"), 290); list.Columns.Add(I18n.T("邮箱"), 320);
-            var rowSize = new ImageList { ImageSize = new Size(1, 46) };
+            Theme.Form(this, "ValAccount By Noiric", 960, 568);
+            KeyPreview = true;
+
+            // Header: title, account count, search and add.
+            Theme.Label(this, "ValAccount", 32, 20, 420, 34, 16, false, true);
+            summary = Theme.Label(this, "", 32, 56, 440, 22, 9.5f, true);
+            search = Theme.Input(this, 500, 35, 270, false); search.TextChanged += delegate { RefreshList(null); };
+            Theme.Placeholder(search, I18n.T("搜索账号、登录名或邮箱"));
+            Theme.Button(this, I18n.T("+ 添加账号"), 788, 28, 140, 40, true, delegate { Edit(null); });
+
+            // Account list inside a rounded card.
+            Theme.Surface(this, new Rectangle(32, 88, 896, 368));
+            list = new ListView { Location = new Point(36, 94), Size = new Size(888, 356), View = View.Details, FullRowSelect = true, HideSelection = false, MultiSelect = false, BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, HeaderStyle = ColumnHeaderStyle.Nonclickable, Font = Theme.Font(10, false) };
+            list.Columns.Add(I18n.T("账号"), 300); list.Columns.Add(I18n.T("Riot 登录名"), 260); list.Columns.Add(I18n.T("邮箱"), 320);
+            var rowSize = new ImageList { ImageSize = new Size(1, RowHeight) };
             list.SmallImageList = rowSize;
             Disposed += delegate { rowSize.Dispose(); };
             list.OwnerDraw = true;
             list.DrawColumnHeader += delegate(object sender, DrawListViewColumnHeaderEventArgs e) {
-                using (var b = new SolidBrush(Color.FromArgb(237, 237, 240))) e.Graphics.FillRectangle(b, e.Bounds);
-                var r = e.Bounds; r.Inflate(-10, 0);
-                TextRenderer.DrawText(e.Graphics, e.Header.Text, list.Font, r, Theme.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+                using (var b = new SolidBrush(Theme.Card)) e.Graphics.FillRectangle(b, e.Bounds);
+                using (var pen = new Pen(Theme.Border)) e.Graphics.DrawLine(pen, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+                var r = e.Bounds; r.X += e.ColumnIndex == 0 ? 16 : 12; r.Width -= e.ColumnIndex == 0 ? 16 : 12;
+                TextRenderer.DrawText(e.Graphics, e.Header.Text, Theme.Font(9, false), r, Theme.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
             };
             list.DrawSubItem += delegate(object sender, DrawListViewSubItemEventArgs e) {
+                var g = e.Graphics;
                 var rowAccount = data.Accounts.Find(a => a.Id == Convert.ToString(e.Item.Tag));
+                bool selected = e.Item.Selected, hovered = e.ItemIndex == hoverIndex;
                 bool emailLink = e.ColumnIndex == 2 && rowAccount != null && HasMailLink(rowAccount);
-                Color background = e.Item.Selected ? Color.FromArgb(255, 232, 234) : Theme.Card;
-                using (var brush = new SolidBrush(background)) e.Graphics.FillRectangle(brush, e.Bounds);
-                if (e.Item.Selected) {
-                    using (var pen = new Pen(Theme.Accent)) {
-                        e.Graphics.DrawLine(pen, e.Bounds.Left, e.Bounds.Top, e.Bounds.Right, e.Bounds.Top);
-                        e.Graphics.DrawLine(pen, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
-                    }
-                    if (e.ColumnIndex == 0) using (var stripe = new SolidBrush(Theme.Accent)) e.Graphics.FillRectangle(stripe, e.Bounds.Left, e.Bounds.Top, 5, e.Bounds.Height);
-                }
-                using (var font = new Font(list.Font, (e.Item.Selected ? FontStyle.Bold : FontStyle.Regular) | (emailLink ? FontStyle.Underline : FontStyle.Regular))) {
-                    var bounds = e.Bounds; bounds.Inflate(-10, 0);
-                    string text = e.Item.Selected && e.ColumnIndex == 0 ? "  ✓  " + e.SubItem.Text : e.SubItem.Text;
-                    TextRenderer.DrawText(e.Graphics, text, font, bounds, emailLink ? Theme.Accent : Theme.Text,
-                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                using (var brush = new SolidBrush(selected ? Theme.AccentSoft : hovered ? Theme.Hover : Theme.Card)) g.FillRectangle(brush, e.Bounds);
+                using (var pen = new Pen(Theme.Divider)) g.DrawLine(pen, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+                const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+                var bounds = e.Bounds;
+                if (e.ColumnIndex == 0) {
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    if (selected) using (var bar = Theme.Round(new RectangleF(bounds.Left, bounds.Top + 12, 4, bounds.Height - 24), 2)) using (var b = new SolidBrush(Theme.Accent)) g.FillPath(b, bar);
+                    string name = e.SubItem.Text ?? "";
+                    var circle = new Rectangle(bounds.Left + 16, bounds.Top + (bounds.Height - 32) / 2, 32, 32);
+                    using (var b = new SolidBrush(AvatarColor(Convert.ToString(e.Item.Tag)))) g.FillEllipse(b, circle);
+                    string letter = name.Length == 0 ? "?" : Char.IsSurrogate(name, 0) && name.Length > 1 ? name.Substring(0, 2) : name.Substring(0, 1).ToUpperInvariant();
+                    TextRenderer.DrawText(g, letter, Theme.Font(10, true), circle, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+                    var text = new Rectangle(bounds.Left + 60, bounds.Top, bounds.Width - 68, bounds.Height);
+                    TextRenderer.DrawText(g, name, Theme.Font(10, true), text, Theme.Text, flags);
+                } else if (e.ColumnIndex == 2 && String.IsNullOrEmpty(e.SubItem.Text)) {
+                    bounds.X += 12; bounds.Width -= 20;
+                    TextRenderer.DrawText(g, "—", list.Font, bounds, Color.FromArgb(190, 190, 198), flags);
+                } else {
+                    bounds.X += 12; bounds.Width -= 20;
+                    var font = emailLink && hovered ? new Font(list.Font, FontStyle.Underline) : list.Font;
+                    try { TextRenderer.DrawText(g, e.SubItem.Text, font, bounds, emailLink ? Theme.Accent : e.ColumnIndex == 2 ? Theme.Muted : Theme.Text, flags); }
+                    finally { if (font != list.Font) font.Dispose(); }
                 }
             };
-            list.MouseMove += delegate(object sender, MouseEventArgs e) { list.Cursor = EmailAt(e.Location) == null ? Cursors.Default : Cursors.Hand; };
-            list.MouseLeave += delegate { list.Cursor = Cursors.Default; };
+            list.MouseMove += delegate(object sender, MouseEventArgs e) {
+                var item = list.GetItemAt(e.X, e.Y); SetHover(item == null ? -1 : item.Index);
+                list.Cursor = EmailAt(e.Location) == null ? Cursors.Default : Cursors.Hand;
+            };
+            list.MouseLeave += delegate { SetHover(-1); list.Cursor = Cursors.Default; };
             list.MouseClick += delegate(object sender, MouseEventArgs e) {
                 if (e.Button != MouseButtons.Left || busy) return;
                 var a = EmailAt(e.Location); if (a == null) return;
@@ -494,25 +634,67 @@ namespace ValoAccounts {
                 try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
                 catch { Theme.Error(this, I18n.T("无法打开默认浏览器，请检查 Windows 默认浏览器设置。")); }
             };
+            // Clicking empty space would otherwise clear the selection; keep the last chosen account selected.
+            list.MouseUp += delegate {
+                if (list.SelectedItems.Count > 0 || lastSelectedId == null) return;
+                foreach (ListViewItem item in list.Items) if (Convert.ToString(item.Tag) == lastSelectedId) { item.Selected = true; item.Focused = true; break; }
+            };
             list.MouseDoubleClick += async delegate(object sender, MouseEventArgs e) {
                 var hit = list.HitTest(e.Location);
                 if (e.Button == MouseButtons.Left && hit.Item != null && hit.SubItem != hit.Item.SubItems[2]) await Launch();
             };
-            Controls.Add(list); list.SelectedIndexChanged += delegate { list.Invalidate(); UpdateStatus(); };
-            Theme.Button(this, I18n.T("编辑"), 30, 392, 90, 38, false, delegate { var a = Selected(); if (a != null) Edit(a); });
-            Theme.Button(this, I18n.T("删除"), 132, 392, 78, 38, false, delegate { Delete(); });
-            var moreMenu = new ContextMenuStrip();
+            list.KeyDown += async delegate(object sender, KeyEventArgs e) {
+                if (e.KeyCode == Keys.Enter) { e.Handled = e.SuppressKeyPress = true; await Launch(); }
+                else if (e.KeyCode == Keys.Delete) { e.Handled = true; Delete(); }
+            };
+            list.ClientSizeChanged += delegate { FitColumns(); };
+            Controls.Add(list);
+            list.SelectedIndexChanged += delegate { if (list.SelectedItems.Count > 0) lastSelectedId = SelectedId(); list.Invalidate(); UpdateStatus(); };
+            emptyHint = Theme.Label(list, "", 0, 110, list.Width, 64, 10, true);
+            emptyHint.TextAlign = ContentAlignment.MiddleCenter; emptyHint.BackColor = Theme.Card; emptyHint.Visible = false;
+
+            // Footer actions.
+            Theme.Button(this, I18n.T("编辑"), 32, 476, 88, 40, false, delegate { var a = Selected(); if (a != null) Edit(a); });
+            Theme.Button(this, I18n.T("删除"), 130, 476, 88, 40, false, delegate { Delete(); }).Danger = true;
+            var moreMenu = new ContextMenuStrip { ShowImageMargin = false, Renderer = new MenuRenderer(), Font = Theme.Font(10, false), Padding = new Padding(0, 4, 0, 4) };
             moreMenu.Items.Add(I18n.T("账号资料"), null, delegate { Details(); });
             moreMenu.Items.Add(I18n.T("客户端位置"), null, delegate { ChooseLauncher(); });
-            Theme.Button(this, I18n.English ? "语言" : "Language", 222, 392, 100, 38, false, delegate {
+            foreach (ToolStripItem item in moreMenu.Items) { item.Padding = new Padding(8, 6, 24, 6); }
+            Theme.Button(this, I18n.English ? "语言" : "Language", 228, 476, 104, 40, false, delegate {
                 using (var language = new LanguageForm()) if (language.ShowDialog(this) == DialogResult.OK) { LanguageChanged = true; Close(); }
             });
             Disposed += delegate { moreMenu.Dispose(); };
-            Theme.Button(this, I18n.T("更多 ···"), 334, 392, 100, 38, false, delegate(object sender, EventArgs e) { var button = (Button)sender; moreMenu.Show(button, new Point(0, button.Height)); });
-            launch = Theme.Button(this, I18n.T("启动并填入 →"), 720, 388, 200, 44, true, async delegate { await Launch(); });
-            status = Theme.Label(this, "", 30, 446, 890, 25, 9, true);
+            Theme.Button(this, I18n.T("更多 ···"), 342, 476, 104, 40, false, delegate(object sender, EventArgs e) { var button = (Button)sender; moreMenu.Show(button, new Point(0, button.Height + 4)); });
+            launch = Theme.Button(this, I18n.T("启动并填入 →"), 728, 472, 200, 48, true, async delegate { await Launch(); });
+            launch.Font = Theme.Font(10.5f, true);
+            status = Theme.Label(this, "", 32, 532, 896, 24, 9, true);
             RefreshList(null);
+            KeyDown += delegate(object sender, KeyEventArgs e) {
+                if (e.Control && e.KeyCode == Keys.F) { search.Focus(); search.SelectAll(); e.Handled = e.SuppressKeyPress = true; }
+                else if (e.Control && e.KeyCode == Keys.N && !busy) { e.Handled = e.SuppressKeyPress = true; Edit(null); }
+            };
+            Shown += delegate { list.Focus(); };
             FormClosing += delegate(object sender, FormClosingEventArgs e) { if (busy) { cancellation.Cancel(); e.Cancel = true; status.Text = I18n.T("正在停止填入，请稍候…"); } else SafeClipboard.Clear(); };
+        }
+        static Color AvatarColor(string id) {
+            int sum = 0; foreach (char c in id ?? "") sum += c;
+            return AvatarColors[sum % AvatarColors.Length];
+        }
+        void SetHover(int index) {
+            if (index == hoverIndex) return;
+            int old = hoverIndex; hoverIndex = index;
+            if (old >= 0 && old < list.Items.Count) list.Invalidate(list.Items[old].Bounds);
+            if (index >= 0 && index < list.Items.Count) list.Invalidate(list.Items[index].Bounds);
+        }
+        void FitColumns() {
+            int width = list.ClientSize.Width;
+            if (!list.IsHandleCreated) {
+                // Before the handle exists, estimate whether a vertical scrollbar will be needed.
+                bool scroll = list.Items.Count * RowHeight + 32 > list.Height;
+                width = list.Width - (scroll ? SystemInformation.VerticalScrollBarWidth : 0);
+            }
+            int rest = width - list.Columns[0].Width - list.Columns[1].Width;
+            if (rest > 80 && list.Columns[2].Width != rest) list.Columns[2].Width = rest;
         }
         string SelectedId() { return list.SelectedItems.Count == 0 ? null : Convert.ToString(list.SelectedItems[0].Tag); }
         static bool HasMailLink(Account a) {
@@ -526,14 +708,20 @@ namespace ValoAccounts {
         }
         Account Selected() { string id = SelectedId(); return data.Accounts.Find(a => a.Id == id); }
         void RefreshList(string wanted) {
-            string keep = wanted ?? SelectedId(); list.BeginUpdate(); list.Items.Clear();
+            string keep = wanted ?? SelectedId() ?? lastSelectedId; list.BeginUpdate(); list.Items.Clear(); hoverIndex = -1;
             string q = search.Text.Trim();
             foreach (var a in data.Accounts.Where(a => (a.Label + " " + a.Username + " " + a.Email).IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)) {
                 var item = new ListViewItem(new[] { a.ToString(), a.Username, a.Email ?? "" }) { Tag = a.Id };
-                list.Items.Add(item); if (a.Id == keep) item.Selected = true;
+                list.Items.Add(item); if (a.Id == keep) { item.Selected = true; item.Focused = true; }
             }
-            if (list.SelectedItems.Count == 0 && list.Items.Count > 0) list.Items[0].Selected = true;
-            list.EndUpdate(); UpdateStatus();
+            if (list.SelectedItems.Count == 0 && list.Items.Count > 0) { list.Items[0].Selected = true; list.Items[0].Focused = true; }
+            list.EndUpdate(); FitColumns();
+            if (list.SelectedItems.Count > 0) list.SelectedItems[0].EnsureVisible();
+            emptyHint.Visible = list.Items.Count == 0;
+            emptyHint.Text = data.Accounts.Count == 0 ? I18n.T("还没有账号。点击右上角“+ 添加账号”开始。") : I18n.T("没有匹配的账号，换个关键词试试。");
+            int count = data.Accounts.Count;
+            summary.Text = count == 0 ? I18n.T("添加账号后，双击即可启动并填入。") : count + I18n.T(" 个账号 · 双击账号即可启动并填入");
+            UpdateStatus();
         }
         void UpdateStatus() {
             if (status == null || busy) return;
@@ -563,31 +751,43 @@ namespace ValoAccounts {
         }
         public static Form AccountDetails(Account a) {
             var f = new Form();
-            Theme.Form(f, I18n.T("账号资料 · ") + a.ToString(), 600, 490);
-            Theme.Label(f, I18n.T("账号资料"), 28, 22, 540, 38, 20, false);
+            Theme.Form(f, I18n.T("账号资料 · ") + a.ToString(), 600, 500); f.MinimizeBox = false; f.ShowInTaskbar = false;
+            Theme.Label(f, I18n.T("账号资料"), 32, 22, 536, 34, 16, false, true);
+            Theme.Label(f, a.ToString(), 32, 58, 536, 22, 9.5f, true);
+            Theme.Surface(f, new Rectangle(32, 96, 536, 320));
             string[] labels = { "Riot 登录名", "Riot 密码", "邮箱地址", "邮箱密码" };
             string[] values = { a.Username, a.Password, a.Email, a.EmailPassword };
             string[] buttons = { "复制登录名", "复制密码", "复制邮箱", "复制邮箱密码" };
             var secrets = new List<TextBox>();
+            Button first = null;
             for (int i = 0; i < labels.Length; i++) {
-                int y = 85 + i * 76;
+                int y = 112 + i * 74;
                 bool secret = i == 1 || i == 3;
                 string value = values[i] ?? "";
-                Theme.Label(f, I18n.T(labels[i]), 28, y, 540, 24, 10, true);
-                var input = Theme.Input(f, 28, y + 30, 360, secret && value.Length > 0);
+                Theme.Label(f, I18n.T(labels[i]), 52, y, 330, 22, 9.5f, true);
+                var input = Theme.Input(f, 52, y + 31, 330, secret && value.Length > 0);
                 input.Text = value.Length == 0 ? I18n.T("未填写") : value;
-                input.ReadOnly = true;
+                input.ReadOnly = true; input.BackColor = Theme.Field; input.TabStop = false;
                 if (secret && value.Length > 0) secrets.Add(input);
                 if (value.Length == 0) input.ForeColor = Theme.Muted;
-                var copy = Theme.Button(f, I18n.T(buttons[i]), 405, y + 23, 165, 38, false, delegate {
-                    try { SafeClipboard.Copy(value); } catch { Theme.Error(f, I18n.T("剪贴板暂时不可用。")); }
+                string caption = I18n.T(buttons[i]);
+                RoundedButton copy = null;
+                var revert = new System.Windows.Forms.Timer { Interval = 1600 };
+                revert.Tick += delegate { revert.Stop(); copy.Text = caption; };
+                f.Disposed += delegate { revert.Dispose(); };
+                copy = Theme.Button(f, caption, 396, y + 24, 152, 40, false, delegate {
+                    try { SafeClipboard.Copy(value); copy.Text = "✓ " + I18n.T("已复制"); revert.Stop(); revert.Start(); }
+                    catch { Theme.Error(f, I18n.T("剪贴板暂时不可用。")); }
                 });
+                copy.Surface = Theme.Card;
                 copy.Enabled = value.Length > 0;
+                if (first == null && copy.Enabled) first = copy;
             }
-            var reveal = new CheckBox { Text = I18n.T("显示密码"), Location = new Point(28, 402), Size = new Size(260, 26) };
+            var reveal = Theme.Check(f, I18n.T("显示密码"), 32, 430, 260);
             reveal.CheckedChanged += delegate { foreach (var input in secrets) input.UseSystemPasswordChar = !reveal.Checked; };
-            f.Controls.Add(reveal);
-            Theme.Label(f, I18n.T("复制后 30 秒或关闭时清除，并请求 Windows 不保留历史。"), 28, 447, 540, 32, 9, true);
+            Theme.Label(f, I18n.T("复制后 30 秒或关闭时清除，并请求 Windows 不保留历史。"), 32, 462, 536, 22, 9, true);
+            if (first != null) f.ActiveControl = first;
+            f.KeyPreview = true; f.KeyDown += delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Escape) f.Close(); };
             f.FormClosed += delegate { SafeClipboard.Clear(); };
             return f;
         }
